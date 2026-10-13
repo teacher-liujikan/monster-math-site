@@ -1,0 +1,391 @@
+<title>怪獸算式大螢幕版</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Noto+Sans+TC:wght@500;700;900&display=swap">
+<style>
+/* Layout: one-screen classroom board — hex number board on the left, monster cards + equation tray on the right; stacks on narrow screens. Single bright theme by choice (projected/TV in a lit classroom). */
+:root{
+  color-scheme: light;
+  --bg:#e7eef0;
+  --panel:#ffffff;
+  --ink:#1b2a33;
+  --muted:#5d6f78;
+  --line:#c9d6db;
+  --y:#f1bd22; --b:#3a78d6; --r:#e2513c;
+  --y-ink:#5a4100; --b-ink:#ffffff; --r-ink:#ffffff;
+  --ok:#1f9d63; --bad:#c8402c;
+  --accent:#6a4bd1;
+  --display:"Baloo 2","Noto Sans TC",system-ui,sans-serif;
+  --body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);margin:0}
+.app{min-height:100%;display:flex;flex-direction:column;gap:clamp(8px,1.2vw,18px);padding-inline:clamp(16px,2vw,32px);padding-block:clamp(10px,1.4vw,22px);box-sizing:border-box}
+button{font-family:inherit;cursor:pointer;touch-action:manipulation}
+button:focus-visible{outline:4px solid var(--accent);outline-offset:3px}
+
+/* top bar */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.brand{font-family:var(--display);font-weight:800;font-size:clamp(22px,2.4vw,40px);line-height:1;margin-right:auto;letter-spacing:.02em;display:flex;align-items:center;gap:10px}
+.brand small{font-family:var(--body);font-size:clamp(12px,1vw,16px);color:var(--muted);font-weight:500}
+.tool{border:2px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;padding:8px 14px;font-size:clamp(14px,1.1vw,19px);font-weight:700}
+.tool:active{transform:translateY(1px)}
+
+.teams{display:flex;flex-wrap:wrap;gap:10px}
+.team{display:flex;align-items:center;gap:10px;border:3px solid transparent;background:var(--panel);border-radius:16px;padding:6px 14px 6px 8px;font-size:clamp(15px,1.25vw,22px);font-weight:700;color:var(--ink);box-shadow:0 1px 0 var(--line)}
+.team .dot{width:clamp(28px,2.4vw,40px);height:clamp(28px,2.4vw,40px);border-radius:50%;display:grid;place-items:center;color:#fff;font-family:var(--display);font-size:clamp(16px,1.4vw,24px);font-weight:800;font-variant-numeric:tabular-nums}
+.team.on{border-color:var(--tc);box-shadow:0 0 0 4px color-mix(in srgb,var(--tc) 25%,transparent)}
+.team .lab{font-size:.75em;color:var(--muted);font-weight:500;display:block;line-height:1.1}
+
+/* main */
+.main{flex:1;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:clamp(10px,1.4vw,24px);min-height:0}
+@media (max-width:900px){.main{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border-radius:22px;padding:clamp(10px,1.2vw,20px);display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel h2{margin:0;font-size:clamp(15px,1.2vw,21px);color:var(--muted);font-weight:700;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.rule{font-size:clamp(14px,1.15vw,20px);color:var(--ink);font-weight:500}
+.rule b{font-weight:900}
+
+.boardWrap{flex:1;display:grid;place-items:center;min-height:0}
+#board{width:100%;height:auto;max-height:72vh;display:block;user-select:none;-webkit-user-select:none}
+.hex{cursor:pointer}
+.hex polygon{stroke:#fff;stroke-width:4;transition:transform .15s}
+.hex text{font-family:var(--display);font-weight:800;font-size:46px;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.hex.sel polygon{stroke:var(--ink);stroke-width:7}
+.hex.dim{opacity:.35}
+.hex .ord{font-size:20px;font-family:var(--display)}
+.hex.hint polygon{animation:pulse 0.9s ease-in-out infinite}
+@keyframes pulse{50%{stroke:var(--accent);stroke-width:9}}
+.pathline{stroke:var(--ink);stroke-width:6;stroke-linecap:round;fill:none;opacity:.55;pointer-events:none}
+
+/* cards */
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(8px,1vw,16px)}
+.card{border:3px solid var(--line);border-radius:18px;padding:8px 8px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;background:var(--panel);transition:transform .2s}
+.card.win{animation:caught .7s ease forwards}
+@keyframes caught{30%{transform:scale(1.08) rotate(-3deg);border-color:var(--ok)}100%{transform:scale(.6);opacity:0}}
+.card svg{width:min(100%,150px);height:auto;aspect-ratio:1}
+.card .num{font-family:var(--display);font-weight:800;font-size:clamp(40px,4.4vw,78px);line-height:.9;font-variant-numeric:tabular-nums}
+.card .seal{font-size:clamp(13px,1vw,17px);color:var(--muted);font-weight:700}
+.card .seal b{color:var(--accent);font-family:var(--display);font-size:1.3em}
+.card .pts{position:absolute;top:8px;right:10px;background:var(--ink);color:#fff;border-radius:999px;padding:1px 10px;font-family:var(--display);font-weight:800;font-size:clamp(14px,1.1vw,20px)}
+.card .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.mini{border:2px solid var(--line);background:var(--bg);border-radius:10px;padding:4px 10px;font-size:clamp(12px,.95vw,16px);font-weight:700;color:var(--ink)}
+.card.empty{border-style:dashed;color:var(--muted);justify-content:center;min-height:180px;font-weight:700}
+
+/* equation */
+.tray{border-top:2px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:12px}
+.chips{display:flex;gap:10px;flex-wrap:wrap;min-height:clamp(48px,4.4vw,72px);align-items:center}
+.chip{width:clamp(48px,4.4vw,72px);height:clamp(48px,4.4vw,72px);border-radius:14px;border:none;font-family:var(--display);font-weight:800;font-size:clamp(26px,2.6vw,44px)}
+.chip.used{opacity:.25}
+.chips .ph{color:var(--muted);font-size:clamp(14px,1.15vw,20px)}
+.eq{display:flex;align-items:center;gap:clamp(6px,.8vw,14px);flex-wrap:wrap}
+.slot{width:clamp(60px,5.6vw,96px);height:clamp(60px,5.6vw,96px);border-radius:16px;border:3px dashed var(--line);background:var(--bg);font-family:var(--display);font-weight:800;font-size:clamp(32px,3.2vw,56px);color:var(--ink);display:grid;place-items:center;padding:0}
+.slot.full{border-style:solid;border-color:transparent}
+.op{width:clamp(48px,4.2vw,72px);height:clamp(48px,4.2vw,72px);border-radius:50%;border:3px solid var(--ink);background:var(--panel);font-family:var(--display);font-weight:800;font-size:clamp(28px,2.8vw,48px);color:var(--ink);padding:0;line-height:1}
+.eqv{font-family:var(--display);font-weight:800;font-size:clamp(34px,3.4vw,60px);min-width:2.5em;font-variant-numeric:tabular-nums}
+.eqv.ok{color:var(--ok)} .eqv.bad{color:var(--bad)}
+.msg{font-size:clamp(15px,1.25vw,22px);font-weight:700;min-height:1.5em;color:var(--muted)}
+.msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.big{border:none;border-radius:14px;padding:10px 20px;font-size:clamp(16px,1.3vw,24px);font-weight:900;background:var(--ink);color:#fff}
+.big.alt{background:var(--panel);color:var(--ink);border:3px solid var(--ink)}
+.shake{animation:shake .4s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+
+/* overlays */
+.ov{position:fixed;inset:0;background:color-mix(in srgb,var(--ink) 55%,transparent);display:grid;place-items:center;padding:16px;z-index:10;overflow:auto}
+.ov[hidden]{display:none}
+.vsheet{width:min(1400px,100%)}
+.vsheet video{width:100%;aspect-ratio:16/9;border-radius:16px;background:#000;display:block}
+.sheet{background:var(--panel);border-radius:24px;padding:clamp(18px,2vw,34px);width:min(760px,100%);box-sizing:border-box;display:flex;flex-direction:column;gap:18px;max-height:calc(100vh - 32px);overflow:auto}
+.sheet h3{margin:0;font-family:var(--display);font-size:clamp(26px,2.4vw,40px);font-weight:800}
+.field{display:flex;flex-direction:column;gap:8px}
+.field > span{font-weight:900;font-size:clamp(15px,1.2vw,20px)}
+.field > small{color:var(--muted);font-size:clamp(13px,1vw,16px)}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg button{border:3px solid var(--line);background:var(--bg);border-radius:12px;padding:8px 14px;font-size:clamp(15px,1.15vw,20px);font-weight:700;color:var(--ink)}
+.seg button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:#fff}
+.podium{display:flex;flex-direction:column;gap:8px}
+.podium div{display:flex;align-items:center;gap:12px;font-size:clamp(18px,1.6vw,28px);font-weight:700}
+.podium .dot{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff;font-family:var(--display);font-weight:800}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="app">
+  <div class="top">
+    <div class="brand">怪獸算式 <small>全班大螢幕版</small></div>
+    <button class="tool" id="btnVideo">教學影片</button>
+    <button class="tool" id="btnShuffle">重排板塊</button>
+    <button class="tool" id="btnSettings">老師設定</button>
+    <button class="tool" id="btnFull">全螢幕</button>
+  </div>
+  <div class="teams" id="teams"></div>
+  <div class="main">
+    <section class="panel">
+      <h2><span>數字板塊</span><span class="rule" id="ruleText"></span></h2>
+      <div class="boardWrap"><svg id="board" role="group" aria-label="數字板塊"></svg></div>
+    </section>
+    <section class="panel">
+      <h2><span>怪獸卡 · 算出牠的密碼就能抓到</span><span id="deckLeft"></span></h2>
+      <div class="cards" id="cards"></div>
+      <div class="tray">
+        <div class="chips" id="chips"></div>
+        <div class="eq" id="eq"></div>
+        <div class="msg" id="msg"></div>
+        <div class="row">
+          <button class="big alt" id="btnClear">清除重來</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="ov" id="setup" hidden></div>
+<div class="ov" id="over" hidden></div>
+<div class="ov" id="vid" hidden>
+  <div class="sheet vsheet" role="dialog" aria-label="教學影片">
+    <h3>怎麼玩？看教學影片</h3>
+    <video id="tut" src="tutorial.mp4" controls playsinline preload="metadata"></video>
+    <div class="row"><button class="big" id="btnVidClose">關閉影片</button></div>
+  </div>
+</div>
+
+<script>
+(function(){
+const COLORS=['var(--y)','var(--b)','var(--r)'];
+const INK=['var(--y-ink)','var(--b-ink)','var(--r-ink)'];
+const CNAME=['黃','藍','紅'];
+const TEAMC=['#7a4fd6','#1f9d63','#e07b16','#d6407f','#14889a','#8a6236'];
+const MONC=['#8fd16a','#f39ac0','#7cc6f2','#c7a4f5','#ffb86b','#6fdcc4','#f5d26b','#ff8f7a'];
+
+let S={teams:4,rule:'same',ops:'pmx',range:56,seal:false};
+try{const s=JSON.parse(localStorage.getItem('mm-settings')||'null');if(s)S=Object.assign(S,s)}catch(e){}
+
+let tiles=[],adj=[],sols=new Map(),deck=[],cards=[],teams=[],cur=0;
+let sel=[],slots=[null,null,null],ops=['×','+'],hint=null,busy=false;
+let msg={t:'',k:''};
+let cardSeq=0;
+
+const opsList=()=>({pm:['+','−'],pmx:['+','−','×'],pmxd:['+','−','×','÷']})[S.ops];
+const $=id=>document.getElementById(id);
+
+function rnd(n){return Math.floor(Math.random()*n)}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
+function pts(base){return base<=12?1:base<=24?2:base<=40?3:4}
+
+/* ---------- board ---------- */
+const COLS=6,ROWS=5,R=58,W=Math.sqrt(3)*R;
+function makeBoard(){
+  const colors=shuffle(Array.from({length:COLS*ROWS},(_,i)=>i%3));
+  tiles=[];
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const i=tiles.length;
+    tiles.push({i,r,c,x:W*(c+0.5*(r&1))+W/2+8,y:R*1.5*r+R+8,color:colors[i],n:1+rnd(9)});
+  }
+  adj=tiles.map(a=>tiles.filter(b=>b!==a&&Math.hypot(a.x-b.x,a.y-b.y)<W*1.1).map(b=>b.i));
+}
+function colorOK(ids){
+  const cs=ids.map(i=>tiles[i].color);
+  if(S.rule==='same')return cs.every(c=>c===cs[0]);
+  if(S.rule==='diff')return new Set(cs).size===cs.length;
+  return true;
+}
+function evalExpr(a,o1,b,o2,c){
+  const ap=(x,o,y)=>{if(x===null||y===null)return null;
+    if(o==='+')return x+y;if(o==='−')return x-y;if(o==='×')return x*y;
+    if(o==='÷'){if(y===0||x%y!==0)return null;return x/y}};
+  const hi=o=>o==='×'||o==='÷';
+  if(hi(o2)&&!hi(o1))return ap(a,o1,ap(b,o2,c));
+  return ap(ap(a,o1,b),o2,c);
+}
+const PERMS=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+function computeSols(){
+  sols=new Map();const L=opsList();
+  for(let b=0;b<tiles.length;b++)for(const a of adj[b])for(const c of adj[b]){
+    if(a===c)continue;const path=[a,b,c];
+    if(!colorOK(path))continue;
+    for(const p of PERMS){const ids=p.map(k=>path[k]);const v=ids.map(i=>tiles[i].n);
+      for(const o1 of L)for(const o2 of L){
+        const r=evalExpr(v[0],o1,v[1],o2,v[2]);
+        if(r!==null&&r>0&&r<=99&&!sols.has(r))sols.set(r,{path,ids,o1,o2});
+      }}
+  }
+}
+function goodBoard(){
+  makeBoard();computeSols();
+  let best=null,bestN=-1;
+  for(let t=0;t<60;t++){
+    let n=0;for(let v=1;v<=S.range;v++)if(sols.has(v))n++;
+    if(n>bestN){bestN=n;best={tiles,adj,sols}}
+    if(n>=S.range*0.7)break;
+    makeBoard();computeSols();
+  }
+  ({tiles,adj,sols}=best);
+}
+
+/* ---------- cards ---------- */
+function target(cd){return cd.base+cd.mod}
+function drawCard(){
+  for(let k=0;k<deck.length;k++){
+    const base=deck.shift();
+    const mod=S.seal?[-2,-1,1,2,3][rnd(5)]:0;
+    const cd={base,mod,id:++cardSeq};
+    const t=target(cd);
+    if(t>=1&&sols.has(t)&&!cards.some(x=>x&&target(x)===t))return cd;
+    deck.push(base);
+  }
+  return null;
+}
+function fillCards(){for(let i=0;i<3;i++)if(!cards[i])cards[i]=drawCard();}
+
+/* ---------- game ---------- */
+function newGame(){
+  teams=Array.from({length:S.teams},(_,i)=>({name:'第'+(i+1)+'組',color:TEAMC[i],score:0,count:0}));
+  cur=0;deck=shuffle(Array.from({length:S.range},(_,i)=>i+1));cards=[null,null,null];
+  goodBoard();fillCards();resetSel();msg={t:'先點要答題的組別，再點三個相連的格子',k:''};render();
+}
+function resetSel(){sel=[];slots=[null,null,null];ops=[opsList().includes('×')?'×':'+','+'];}
+
+/* ---------- monster art (original, procedural) ---------- */
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function monster(seed){
+  const R=mulberry(seed*9973+17);const col=MONC[Math.floor(R()*MONC.length)];
+  const pts=[];const N=9;
+  for(let k=0;k<N;k++){const a=k/N*Math.PI*2-Math.PI/2;const rr=30+R()*9;pts.push([50+Math.cos(a)*rr,58+Math.sin(a)*rr*0.92])}
+  let d='';for(let k=0;k<N;k++){const p=pts[k],q=pts[(k+1)%N];const m=[(p[0]+q[0])/2,(p[1]+q[1])/2];
+    if(k===0){const pr=pts[N-1];d+=`M${(pr[0]+p[0])/2},${(pr[1]+p[1])/2}`}d+=` Q${p[0]},${p[1]} ${m[0]},${m[1]}`}
+  const eyes=1+Math.floor(R()*3);let e='';
+  const ey=48+R()*6;
+  for(let k=0;k<eyes;k++){const x=50+(k-(eyes-1)/2)*(eyes===1?0:18);const r=eyes===1?11:7+R()*2;
+    e+=`<circle cx="${x}" cy="${ey}" r="${r}" fill="#fff" stroke="#1b2a33" stroke-width="2"/><circle cx="${x+R()*3-1.5}" cy="${ey+1}" r="${r*0.45}" fill="#1b2a33"/>`}
+  const horn=R()<0.6;let h='';
+  if(horn){const t=R()<0.5;
+    h=t?`<path d="M34,34 L28,14 L42,30Z M66,34 L72,14 L58,30Z" fill="#fff6dc" stroke="#1b2a33" stroke-width="2"/>`
+       :`<path d="M50,30 Q48,16 56,10" stroke="#1b2a33" stroke-width="3" fill="none"/><circle cx="57" cy="10" r="4" fill="${col}" stroke="#1b2a33" stroke-width="2"/>`}
+  const my=70+R()*4;const teeth=R()<0.5;
+  const mouth=`<path d="M38,${my} Q50,${my+12} 62,${my}" fill="${teeth?'#fff':'none'}" stroke="#1b2a33" stroke-width="3" stroke-linecap="round"/>`+
+    (teeth?`<path d="M44,${my+2} l3,5 l3,-4 l3,4 l3,-5" fill="none" stroke="#1b2a33" stroke-width="1.5"/>`:'');
+  return `<svg viewBox="0 0 100 100" aria-hidden="true">${h}<path d="${d}Z" fill="${col}" stroke="#1b2a33" stroke-width="3"/>${e}${mouth}<ellipse cx="34" cy="64" rx="5" ry="3" fill="#ff7f9a" opacity=".5"/><ellipse cx="66" cy="64" rx="5" ry="3" fill="#ff7f9a" opacity=".5"/></svg>`;
+}
+
+/* ---------- render ---------- */
+function hexPts(x,y){let s='';for(let k=0;k<6;k++){const a=Math.PI/180*(60*k-30);s+=`${x+R*0.96*Math.cos(a)},${y+R*0.96*Math.sin(a)} `}return s}
+function renderBoard(){
+  const svg=$('board');const w=W*(COLS+0.5)+16,h=R*1.5*(ROWS-1)+R*2+16;
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  const last=sel[sel.length-1];
+  let out='';
+  if(sel.length>1){out+=`<polyline class="pathline" points="${sel.map(i=>tiles[i].x+','+tiles[i].y).join(' ')}"/>`}
+  for(const t of tiles){
+    const isSel=sel.includes(t.i);
+    let can=true;
+    if(!isSel&&sel.length>0){can=sel.length<3&&adj[last].includes(t.i)&&colorOK([...sel,t.i])}
+    const cls=['hex',isSel?'sel':'',(sel.length&&!isSel&&!can)?'dim':'',hint&&hint.includes(t.i)?'hint':''].join(' ');
+    out+=`<g class="${cls}" data-i="${t.i}" role="button" tabindex="0" aria-label="${CNAME[t.color]}色 ${t.n}"><polygon points="${hexPts(t.x,t.y)}" fill="${COLORS[t.color]}"/><text x="${t.x}" y="${t.y+2}" fill="${INK[t.color]}">${t.n}</text>${isSel?`<circle cx="${t.x+R*0.5}" cy="${t.y-R*0.5}" r="15" fill="var(--ink)"/><text class="ord" x="${t.x+R*0.5}" y="${t.y-R*0.5+1}" fill="#fff">${sel.indexOf(t.i)+1}</text>`:''}</g>`;
+  }
+  svg.innerHTML=out;
+}
+function renderTeams(){
+  $('teams').innerHTML=teams.map((t,i)=>`<button class="team ${i===cur?'on':''}" style="--tc:${t.color}" data-team="${i}" aria-pressed="${i===cur}"><span class="dot" style="background:${t.color}">${t.score}</span><span>${t.name}<span class="lab">抓到 ${t.count} 隻${i===cur?' · 答題中':''}</span></span></button>`).join('');
+}
+function renderCards(){
+  $('cards').innerHTML=cards.map((cd,i)=>{
+    if(!cd)return `<div class="card empty">沒有怪獸了</div>`;
+    const t=target(cd);
+    return `<div class="card" data-card="${i}"><span class="pts">+${pts(cd.base)}</span>${monster(cd.base+cd.id*0)}<div class="num">${t}</div>${cd.mod?`<div class="seal">原本 ${cd.base}，封印 <b>${cd.mod>0?'+':''}${cd.mod}</b></div>`:''}<div class="acts"><button class="mini" data-hint="${i}">提示</button><button class="mini" data-pass="${i}">換一隻</button></div></div>`;
+  }).join('');
+  $('deckLeft').textContent='牌庫剩 '+deck.length+' 張';
+}
+function currentValue(){
+  if(slots.some(s=>s===null))return null;
+  return evalExpr(tiles[slots[0]].n,ops[0],tiles[slots[1]].n,ops[1],tiles[slots[2]].n);
+}
+function renderTray(){
+  const chips=$('chips');
+  chips.innerHTML=sel.length?sel.map(i=>{const t=tiles[i];return `<button class="chip ${slots.includes(i)?'used':''}" data-chip="${i}" style="background:${COLORS[t.color]};color:${INK[t.color]}" aria-label="放入 ${t.n}">${t.n}</button>`}).join(''):`<span class="ph">選好的數字會出現在這裡，可以重新排順序</span>`;
+  const slot=k=>{const i=slots[k];if(i===null)return `<button class="slot" data-slot="${k}" aria-label="空格"> </button>`;const t=tiles[i];return `<button class="slot full" data-slot="${k}" style="background:${COLORS[t.color]};color:${INK[t.color]}" aria-label="移出 ${t.n}">${t.n}</button>`};
+  const v=currentValue();
+  const match=v!==null&&cards.some(c=>c&&target(c)===v);
+  $('eq').innerHTML=`${slot(0)}<button class="op" data-op="0" aria-label="換運算符號">${ops[0]}</button>${slot(1)}<button class="op" data-op="1" aria-label="換運算符號">${ops[1]}</button>${slot(2)}<span class="eqv ${v===null?'':match?'ok':'bad'}">= ${v===null?'?':v}</span>`;
+  const m=$('msg');m.textContent=msg.t;m.className='msg '+msg.k;
+}
+function renderRule(){
+  const r={same:'三格<b>同色</b>且相連',any:'任意三格相連',diff:'三格<b>不同色</b>且相連'}[S.rule];
+  const o={pm:'＋ −',pmx:'＋ − ×',pmxd:'＋ − × ÷'}[S.ops];
+  $('ruleText').innerHTML=r+' · '+o;
+}
+function render(){renderTeams();renderBoard();renderCards();renderTray();renderRule()}
+
+/* ---------- sound ---------- */
+let ac=null;
+function beep(seq){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();let t=ac.currentTime;
+  for(const [f,d] of seq){const o=ac.createOscillator(),g=ac.createGain();o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d);t+=d*0.8}}catch(e){}}
+
+/* ---------- interactions ---------- */
+function tapTile(i){
+  if(busy)return;
+  if(sel.includes(i)){const k=sel.indexOf(i);const removed=sel.splice(k);slots=slots.map(s=>removed.includes(s)?null:s);msg={t:'',k:''};render();return}
+  if(sel.length>=3){msg={t:'已經選三格了，點已選的格子可以取消',k:'bad'};renderTray();return}
+  if(sel.length){const last=sel[sel.length-1];
+    if(!adj[last].includes(i)){msg={t:'要選跟上一格相鄰的格子',k:'bad'};renderTray();return}
+    if(!colorOK([...sel,i])){msg={t:S.rule==='same'?'三格要同一個顏色':'三格要不同顏色',k:'bad'};renderTray();return}}
+  sel.push(i);beep([[520+sel.length*80,.08]]);
+  if(sel.length===3){slots=[...sel];msg={t:'可以點運算符號換算式，或點格子重新排數字',k:''}}else msg={t:'',k:''};
+  render();check();
+}
+function check(){
+  const v=currentValue();if(v===null)return;
+  const k=cards.findIndex(c=>c&&target(c)===v);
+  if(k<0){msg={t:`= ${v}，場上沒有這隻怪獸，再換換看`,k:'bad'};renderTray();$('eq').classList.remove('shake');void $('eq').offsetWidth;$('eq').classList.add('shake');return}
+  busy=true;const cd=cards[k];const p=pts(cd.base);const tm=teams[cur];
+  tm.score+=p;tm.count++;
+  msg={t:`${tm.name} 抓到 ${target(cd)} 號怪獸！+${p} 分`,k:'ok'};
+  renderTray();renderTeams();
+  beep([[523,.12],[659,.12],[784,.2]]);
+  const el=document.querySelector(`[data-card="${k}"]`);if(el)el.classList.add('win');
+  setTimeout(()=>{cards[k]=drawCard();hint=null;resetSel();busy=false;render();
+    if(cards.every(c=>!c))gameOver()},800);
+}
+document.addEventListener('click',e=>{
+  const g=e.target.closest('.hex');if(g){tapTile(+g.dataset.i);return}
+  const b=e.target.closest('button');if(!b)return;
+  const d=b.dataset;
+  if(d.team!==undefined){cur=+d.team;renderTeams();return}
+  if(d.chip!==undefined){const i=+d.chip;if(slots.includes(i))return;const k=slots.indexOf(null);if(k<0)return;slots[k]=i;renderTray();check();return}
+  if(d.slot!==undefined){if(busy)return;slots[+d.slot]=null;msg={t:'',k:''};renderTray();return}
+  if(d.op!==undefined){if(busy)return;const L=opsList();const k=+d.op;ops[k]=L[(L.indexOf(ops[k])+1)%L.length];renderTray();check();return}
+  if(d.hint!==undefined){const cd=cards[+d.hint];const s=sols.get(target(cd));if(s){hint=s.path;msg={t:'答案藏在閃爍的三格裡',k:''};render()}return}
+  if(d.pass!==undefined){const k=+d.pass;deck.push(cards[k].base);cards[k]=null;cards[k]=drawCard();hint=null;render();return}
+  if(d.set){const [key,val]=d.set.split(':');S[key]=key==='teams'||key==='range'?+val:key==='seal'?val==='1':val;
+    if(key==='range')S.ops=S.range<=18?'pm':S.ops==='pm'?'pmx':S.ops;renderSetup();return}
+});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.closest&&e.target.closest('.hex')){e.preventDefault();tapTile(+e.target.closest('.hex').dataset.i)}});
+$('btnClear').onclick=()=>{if(busy)return;resetSel();hint=null;msg={t:'',k:''};render()};
+$('btnShuffle').onclick=()=>{if(busy)return;goodBoard();cards=cards.map(c=>c&&sols.has(target(c))?c:(c&&deck.push(c.base),null));fillCards();resetSel();hint=null;msg={t:'板塊重新排好了',k:''};render()};
+$('btnFull').onclick=()=>{try{const p=document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();p&&p.catch&&p.catch(()=>{})}catch(e){}};
+function openVideo(){$('vid').hidden=false;const v=$('tut');try{v.currentTime=0;const p=v.play();p&&p.catch&&p.catch(()=>{})}catch(e){}}
+$('btnVideo').onclick=openVideo;
+$('btnVidClose').onclick=()=>{try{$('tut').pause()}catch(e){}$('vid').hidden=true};
+$('btnSettings').onclick=()=>{renderSetup();$('setup').hidden=false};
+
+/* ---------- setup & game over ---------- */
+function seg(key,opts){return `<div class="seg">${opts.map(([v,l])=>`<button data-set="${key}:${v}" aria-pressed="${String(S[key])===String(v)||(key==='seal'&&String(+S.seal)===v)}">${l}</button>`).join('')}</div>`}
+function renderSetup(){
+  $('setup').innerHTML=`<div class="sheet" role="dialog" aria-label="老師設定"><h3>老師設定</h3>
+  <label class="field"><span>組數</span>${seg('teams',[[2,'2 組'],[3,'3 組'],[4,'4 組'],[5,'5 組'],[6,'6 組']])}</label>
+  <div class="field"><span>怪獸數字範圍</span>${seg('range',[[18,'1–18（低年級）'],[30,'1–30'],[56,'1–56（完整）']])}<small>數字越大的怪獸越難，分數也越高（1–12 得 1 分，13–24 得 2 分，25–40 得 3 分，41 以上得 4 分）</small></div>
+  <div class="field"><span>可用的運算</span>${seg('ops',[['pm','只有加減'],['pmx','加減乘'],['pmxd','加減乘除']])}<small>除法只算整除的情況</small></div>
+  <div class="field"><span>選格規則</span>${seg('rule',[['same','同色相連'],['any','任意相連（較簡單）'],['diff','三色不同相連']])}</div>
+  <div class="field"><span>封印數字（進階）</span>${seg('seal',[['0','關閉'],['1','開啟']])}<small>開啟後每隻怪獸會加上 −2 到 +3 的封印，要算出加減後的新密碼</small></div>
+  <div class="row"><button class="big" id="btnStart">開始新遊戲</button>${teams.length?'<button class="big alt" id="btnBack">回到遊戲</button>':''}<button class="big alt" id="btnSetupVid">先看教學影片</button></div></div>`;
+  $('btnSetupVid').onclick=openVideo;
+  $('btnStart').onclick=()=>{try{localStorage.setItem('mm-settings',JSON.stringify(S))}catch(e){}$('setup').hidden=true;$('over').hidden=true;newGame()};
+  const bk=$('btnBack');if(bk)bk.onclick=()=>{$('setup').hidden=true};
+}
+function gameOver(){
+  const rank=[...teams].sort((a,b)=>b.score-a.score);
+  $('over').innerHTML=`<div class="sheet"><h3>怪獸全部抓完了！</h3><div class="podium">${rank.map((t,i)=>`<div><span class="dot" style="background:${t.color}">${i+1}</span>${t.name} · ${t.score} 分（${t.count} 隻）</div>`).join('')}</div><div class="row"><button class="big" id="btnAgain">再玩一次</button></div></div>`;
+  $('over').hidden=false;$('btnAgain').onclick=()=>{$('over').hidden=true;renderSetup();$('setup').hidden=false};
+}
+
+newGame();renderSetup();$('setup').hidden=false;
+})();
+</script>
